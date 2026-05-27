@@ -23,7 +23,7 @@ import { PUBLISH_TOOL, makePublishHandler } from './tools/publish.js'
 import type { ToolHandler } from './tools/types.js'
 
 const SERVER_NAME = 'dreamland'
-const SERVER_VERSION = '0.1.0'
+const SERVER_VERSION = '0.2.0'
 
 async function main(): Promise<void> {
   let config

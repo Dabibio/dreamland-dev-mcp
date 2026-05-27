@@ -12,6 +12,8 @@
  *  - 走 backend ownership 校验,跟 N2 一致(失败一律 404 处理,不暴露存在性)。
  */
 
+import { isAbsolute } from 'node:path'
+
 import type { Config } from '../config.js'
 import { BackendError, request } from '../http.js'
 import { logger } from '../logger.js'
@@ -29,15 +31,24 @@ interface ProjectSummary {
 export const LINK_TOOL = {
   name: 'dreamland_link',
   description:
-    'Bind the current working directory to an existing DreamLand project by writing ' +
-    '.dreamland/project.json. Use this when switching machines or recovering a lost marker. ' +
-    'The project must exist on DreamLand and belong to you.',
+    'Bind a local directory to an existing DreamLand project by writing .dreamland/project.json. ' +
+    'Use this when switching machines or recovering a lost marker. The project must exist on ' +
+    'DreamLand and belong to you. ' +
+    'IMPORTANT for agents: pass project_dir as the absolute path to the user\'s open workspace, ' +
+    'otherwise the marker is written in the MCP server\'s working directory (typically the user ' +
+    'home), which pollutes every other project.',
   inputSchema: {
     type: 'object',
     properties: {
       project_id: {
         type: 'number',
         description: 'Numeric project id to link to. Get it from dreamland_list_projects.',
+      },
+      project_dir: {
+        type: 'string',
+        description:
+          'Absolute path to the user\'s project root. The .dreamland/project.json marker is ' +
+          'written inside this directory. Default: the server\'s process.cwd().',
       },
     },
     required: ['project_id'],
@@ -47,7 +58,7 @@ export const LINK_TOOL = {
 
 export function makeLinkHandler(config: Config): ToolHandler {
   return async (raw): Promise<ToolResult> => {
-    const args = raw as { project_id?: unknown } | undefined
+    const args = raw as { project_id?: unknown; project_dir?: unknown } | undefined
     const projectId = Number(args?.project_id)
     if (!Number.isInteger(projectId) || projectId <= 0) {
       return {
@@ -60,6 +71,24 @@ export function makeLinkHandler(config: Config): ToolHandler {
         isError: true,
       }
     }
+
+    // 同 publish:绝对路径必须 —— 相对路径会让 cwd bug 隐性传染。
+    const baseDirRaw =
+      typeof args?.project_dir === 'string' ? args.project_dir.trim() : undefined
+    if (baseDirRaw && !isAbsolute(baseDirRaw)) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text:
+              `project_dir must be an absolute path (got "${baseDirRaw}"). ` +
+              `Pass your workspace folder's full path, e.g. /Users/you/code/my-app.`,
+          },
+        ],
+        isError: true,
+      }
+    }
+    const baseDir = baseDirRaw ?? process.cwd()
 
     let project: ProjectSummary
     try {
@@ -98,9 +127,8 @@ export function makeLinkHandler(config: Config): ToolHandler {
       }
     }
 
-    const cwd = process.cwd()
     try {
-      await writeMarker(cwd, {
+      await writeMarker(baseDir, {
         projectId: project.projectId,
         name: project.name,
         createdAt: new Date().toISOString(),
@@ -119,16 +147,16 @@ export function makeLinkHandler(config: Config): ToolHandler {
         isError: true,
       }
     }
-    logger.info('link.written', { projectId: project.projectId, cwd })
+    logger.info('link.written', { projectId: project.projectId, baseDir })
 
     return {
       content: [
         {
           type: 'text',
           text:
-            `Linked this directory to "${project.name}" (project ${project.projectId}).\n` +
+            `Linked "${baseDir}" to "${project.name}" (project ${project.projectId}).\n` +
             `Public URL: ${project.publicUrl}\n` +
-            `Future dreamland_publish calls from this directory will append a new version.`,
+            `Future dreamland_publish calls with project_dir="${baseDir}" will append new versions.`,
         },
       ],
     }
