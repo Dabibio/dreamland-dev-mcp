@@ -1,0 +1,47 @@
+{
+  "name": "@dreamland_dev/mcp",
+  "version": "0.1.0",
+  "description": "DreamLand MCP server — publish your built artifact (./dist) to DreamLand from any MCP-capable agent (Cursor, Claude Code, etc.)",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "dreamland-mcp": "dist/index.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepare": "npm run build",
+    "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "dreamland",
+    "publish",
+    "agent"
+  ],
+  "author": "DreamLand",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dabibio/dreamland-dev-mcp.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "archiver": "^7.0.1"
+  },
+  "devDependencies": {
+    "@types/archiver": "^6.0.2",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.0"
+  }
+}
