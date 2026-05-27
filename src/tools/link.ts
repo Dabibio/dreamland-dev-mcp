@@ -12,12 +12,11 @@
  *  - 走 backend ownership 校验,跟 N2 一致(失败一律 404 处理,不暴露存在性)。
  */
 
-import { isAbsolute } from 'node:path'
-
 import type { Config } from '../config.js'
 import { BackendError, request } from '../http.js'
 import { logger } from '../logger.js'
 import { writeMarker } from '../project-marker.js'
+import { validateProjectDir } from './project-dir.js'
 import type { ToolHandler, ToolResult } from './types.js'
 
 interface ProjectSummary {
@@ -33,10 +32,7 @@ export const LINK_TOOL = {
   description:
     'Bind a local directory to an existing DreamLand project by writing .dreamland/project.json. ' +
     'Use this when switching machines or recovering a lost marker. The project must exist on ' +
-    'DreamLand and belong to you. ' +
-    'IMPORTANT for agents: pass project_dir as the absolute path to the user\'s open workspace, ' +
-    'otherwise the marker is written in the MCP server\'s working directory (typically the user ' +
-    'home), which pollutes every other project.',
+    'DreamLand and belong to you.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -47,11 +43,12 @@ export const LINK_TOOL = {
       project_dir: {
         type: 'string',
         description:
-          'Absolute path to the user\'s project root. The .dreamland/project.json marker is ' +
-          'written inside this directory. Default: the server\'s process.cwd().',
+          'Absolute path to the user\'s project root (their open workspace folder). The ' +
+          '.dreamland/project.json marker is written inside this directory. Required because ' +
+          'the MCP server\'s own process.cwd() does NOT match the user\'s workspace.',
       },
     },
-    required: ['project_id'],
+    required: ['project_id', 'project_dir'],
     additionalProperties: false,
   },
 } as const
@@ -72,23 +69,12 @@ export function makeLinkHandler(config: Config): ToolHandler {
       }
     }
 
-    // 同 publish:绝对路径必须 —— 相对路径会让 cwd bug 隐性传染。
-    const baseDirRaw =
-      typeof args?.project_dir === 'string' ? args.project_dir.trim() : undefined
-    if (baseDirRaw && !isAbsolute(baseDirRaw)) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text:
-              `project_dir must be an absolute path (got "${baseDirRaw}"). ` +
-              `Pass your workspace folder's full path, e.g. /Users/you/code/my-app.`,
-          },
-        ],
-        isError: true,
-      }
+    // 同 publish:project_dir 必填 + 绝对路径 + 真实目录。
+    const baseDirErr = await validateProjectDir(args?.project_dir)
+    if (baseDirErr) {
+      return { content: [{ type: 'text', text: baseDirErr }], isError: true }
     }
-    const baseDir = baseDirRaw ?? process.cwd()
+    const baseDir = (args!.project_dir as string).trim()
 
     let project: ProjectSummary
     try {

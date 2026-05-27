@@ -17,6 +17,7 @@ import { BackendError, request } from '../http.js'
 import { logger } from '../logger.js'
 import { readMarker, writeMarker } from '../project-marker.js'
 import { zipDirectory, ZipError } from '../zip.js'
+import { validateProjectDir } from './project-dir.js'
 import type { ToolHandler, ToolResult } from './types.js'
 
 interface PublishArgs {
@@ -43,27 +44,22 @@ interface ProjectSummary {
 export const PUBLISH_TOOL = {
   name: 'dreamland_publish',
   description:
-    'Publish the built artifact (default ./dist) of the current project to DreamLand. ' +
-    'On first publish in a directory, creates a new project and writes .dreamland/project.json ' +
-    'so subsequent calls publish new versions automatically. ' +
-    'IMPORTANT for agents: pass project_dir as the absolute path to the user\'s open workspace. ' +
-    'MCP clients (Cursor, Claude Code, Windsurf) typically spawn this server with a working ' +
-    'directory unrelated to the user\'s project — without project_dir the tool reads/writes ' +
-    'files in the wrong location.',
+    'Publish the built artifact (default ./dist) of a project to DreamLand. ' +
+    'First publish in a project_dir creates a new DreamLand project and writes ' +
+    '.dreamland/project.json there; subsequent calls with the same project_dir append new versions.',
   inputSchema: {
     type: 'object',
     properties: {
       project_dir: {
         type: 'string',
         description:
-          'Absolute path to the user\'s project root. The .dreamland/project.json marker lives ' +
-          'inside this directory; dist_dir is resolved relative to it. Default: the server\'s ' +
-          'process.cwd() (rarely correct under MCP clients).',
+          'Absolute path to the user\'s project root (their open workspace folder). All other ' +
+          'paths (dist_dir, .dreamland/project.json marker) are resolved relative to this. ' +
+          'Required because the MCP server\'s own process.cwd() does NOT match the user\'s workspace.',
       },
       dist_dir: {
         type: 'string',
-        description:
-          'Directory to package. Absolute, or relative to project_dir. Default: ./dist',
+        description: 'Directory to package. Absolute, or relative to project_dir. Default: ./dist',
       },
       force_new_project: {
         type: 'boolean',
@@ -71,6 +67,7 @@ export const PUBLISH_TOOL = {
           'Ignore the existing .dreamland/project.json link and create a brand-new project. Default: false',
       },
     },
+    required: ['project_dir'],
     additionalProperties: false,
   },
 } as const
@@ -79,16 +76,13 @@ export function makePublishHandler(config: Config): ToolHandler {
   return async (raw): Promise<ToolResult> => {
     const args = (raw ?? {}) as PublishArgs
 
-    // project_dir 决定"项目根"—— 见工具描述,MCP 场景下 process.cwd() 不可靠;agent 应该传一个
-    // 绝对路径过来。给了相对路径就明确拒绝(暗自相对 cwd 解析会让 bug 隐性传染)。
-    const baseDirRaw = args.project_dir?.trim()
-    if (baseDirRaw && !isAbsolute(baseDirRaw)) {
-      return errorResult(
-        `project_dir must be an absolute path (got "${baseDirRaw}"). ` +
-          `Pass your workspace folder's full path, e.g. /Users/you/code/my-app.`,
-      )
-    }
-    const baseDir = baseDirRaw ?? process.cwd()
+    // project_dir 是必填,且必须是已存在的绝对路径。
+    // 为什么不 fallback 到 process.cwd():MCP 客户端 spawn 的子进程 cwd 跟用户的 workspace
+    // 不一致(常见是用户 home),fallback 会让"找不到 marker→ 误建新项目用 cwd 目录名当
+    // 项目名"这种隐性 bug 神不知鬼不觉发生。强制 agent 显式传是更安全的契约。
+    const baseDirErr = await validateProjectDir(args.project_dir)
+    if (baseDirErr) return errorResult(baseDirErr)
+    const baseDir = args.project_dir!.trim()
 
     const distDir = isAbsolute(args.dist_dir ?? '')
       ? (args.dist_dir as string)
