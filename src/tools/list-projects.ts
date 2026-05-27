@@ -20,9 +20,9 @@ interface ProjectSummary {
 export const LIST_PROJECTS_TOOL = {
   name: 'dreamland_list_projects',
   description:
-    'List all projects on DreamLand owned by the currently authenticated user. ' +
-    'Use this to answer questions like "what do I have on DreamLand", "what is the link for project X", ' +
-    'or to look up a project_id before calling dreamland_link.',
+    'List the user\'s DreamLand projects (id, name, current version, public URL). Use when the ' +
+    'user asks what they have on DreamLand, asks for the public URL of a specific DreamLand ' +
+    'project, or before dreamland_link to find the right project_id.',
   inputSchema: {
     type: 'object',
     properties: {},

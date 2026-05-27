@@ -44,9 +44,12 @@ interface ProjectSummary {
 export const PUBLISH_TOOL = {
   name: 'dreamland_publish',
   description:
-    'Publish the built artifact (default ./dist) of a project to DreamLand. ' +
+    'Publish a built frontend artifact (contents of dist_dir, default ./dist relative to ' +
+    'project_dir) to DreamLand, returning a public URL. Trigger this when the user mentions ' +
+    'DreamLand explicitly, OR when the workspace has a .dreamland/project.json marker and the ' +
+    'user asks to push a new version.\n\n' +
     'First publish in a project_dir creates a new DreamLand project and writes ' +
-    '.dreamland/project.json there; subsequent calls with the same project_dir append new versions.',
+    '.dreamland/project.json there. Subsequent calls with the same project_dir append new versions.',
   inputSchema: {
     type: 'object',
     properties: {

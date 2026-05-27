@@ -23,7 +23,33 @@ import { PUBLISH_TOOL, makePublishHandler } from './tools/publish.js'
 import type { ToolHandler } from './tools/types.js'
 
 const SERVER_NAME = 'dreamland'
-const SERVER_VERSION = '0.3.0'
+const SERVER_VERSION = '0.4.0'
+
+/**
+ * Server-level instructions, injected into the MCP client's LLM system prompt per
+ * MCP spec. Tells the model:
+ *
+ *  - what this server is for (scope it tightly to the DreamLand frontend-publishing
+ *    use case so it doesn't fight with other MCP servers like backend/CI tools);
+ *  - what user phrases / workspace signals should make it pick our tools;
+ *  - what is explicitly out of scope (deferred to other MCP servers / scripts);
+ *  - the project_dir calling convention so the model doesn't hit our "required"
+ *    rejection on the first call.
+ */
+const SERVER_INSTRUCTIONS = `DreamLand MCP — publishes a creator's frontend build artifact (typically the contents of ./dist from a web project) to DreamLand, a creator-feedback platform, and returns a public URL where end users can experience the demo.
+
+In scope (use these tools):
+  • User mentions DreamLand by name (publish / share / ship / get-link to DreamLand).
+  • The workspace directory contains \`.dreamland/project.json\` — that file marks the folder as bound to a DreamLand project; "publish a new version" of such a workspace means dreamland_publish.
+  • User asks about their DreamLand inventory: "what do I have on DreamLand", "what's my DreamLand link for X".
+
+Out of scope (defer to other MCP servers or the user's own scripts):
+  • Backend / API / database / container deployments.
+  • Generic CI/CD or hosting platforms other than DreamLand.
+  • Building the project — the user must run their build first. If \`./dist\` is missing, ask them to build, do not build for them.
+
+Calling convention:
+  • Every fs-touching tool (publish, link) requires \`project_dir\` = absolute path to the user's open workspace. The MCP server's own \`process.cwd()\` is NOT the workspace and the tools will reject calls without project_dir.`
 
 async function main(): Promise<void> {
   let config
@@ -48,7 +74,7 @@ async function main(): Promise<void> {
 
   const server = new Server(
     { name: SERVER_NAME, version: SERVER_VERSION },
-    { capabilities: { tools: {} } },
+    { capabilities: { tools: {} }, instructions: SERVER_INSTRUCTIONS },
   )
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({

@@ -30,9 +30,10 @@ interface ProjectSummary {
 export const LINK_TOOL = {
   name: 'dreamland_link',
   description:
-    'Bind a local directory to an existing DreamLand project by writing .dreamland/project.json. ' +
-    'Use this when switching machines or recovering a lost marker. The project must exist on ' +
-    'DreamLand and belong to you.',
+    'Bind a workspace directory to an existing DreamLand project by writing ' +
+    '.dreamland/project.json. Use when the marker is missing or lost (switched machine, repo ' +
+    'cloned fresh), or when the user wants this folder to point at an existing DreamLand ' +
+    'project instead of creating a new one. The project must belong to the authenticated user.',
   inputSchema: {
     type: 'object',
     properties: {
