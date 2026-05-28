@@ -23,7 +23,7 @@ import { PUBLISH_TOOL, makePublishHandler } from './tools/publish.js'
 import type { ToolHandler } from './tools/types.js'
 
 const SERVER_NAME = 'dreamland'
-const SERVER_VERSION = '0.6.0'
+const SERVER_VERSION = '0.7.0'
 
 /**
  * Server-level instructions, injected into the MCP client's LLM system prompt per
@@ -46,7 +46,15 @@ In scope (use these tools):
 Out of scope (defer to other MCP servers or the user's own scripts):
   • Backend / API / database / container deployments.
   • Generic CI/CD or hosting platforms other than DreamLand.
-  • Building the project — the user must run their build first. If \`./dist\` is missing, ask them to build, do not build for them.
+
+Build discipline (mandatory before EVERY dreamland_publish call):
+  • This server packages whatever is on disk at \`dist_dir\` (default \`./dist\`); it does NOT
+    trigger a build. A \`dist/\` left over from minutes / hours ago will be silently published.
+  • You MUST run the user's build command (\`npm run build\` / \`yarn build\` / \`pnpm build\` /
+    \`vite build\` / equivalent) IMMEDIATELY before each publish. Don't trust an existing
+    \`dist/\` — even if the build script ran 5 minutes ago, the user may have edited code since.
+  • If you have shell-exec capability, just run the build yourself. If not, tell the user
+    "I need you to run \`npm run build\` first" and wait.
 
 Calling convention:
   • Every fs-touching tool (publish, link) requires \`project_dir\` = absolute path to the user's open workspace. The MCP server's own \`process.cwd()\` is NOT the workspace and the tools will reject calls without project_dir.`

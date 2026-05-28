@@ -45,10 +45,15 @@ interface ProjectSummary {
 export const PUBLISH_TOOL = {
   name: 'dreamland_publish',
   description:
-    'Publish a built frontend artifact (contents of dist_dir, default ./dist relative to ' +
-    'project_dir) to DreamLand, returning a public URL. Trigger this when the user mentions ' +
-    'DreamLand explicitly, OR when the workspace has a .dreamland/project.json marker and the ' +
-    'user asks to push a new version.\n\n' +
+    '⚠️ BEFORE calling this tool, ALWAYS run the user\'s build command (npm run build / yarn ' +
+    'build / pnpm build / vite build / equivalent) first. This tool packages whatever is at ' +
+    'dist_dir AS-IS — it does NOT trigger a build, and a stale dist/ from earlier will be ' +
+    'silently published. If you have shell access, just run the build yourself; if not, ask the ' +
+    'user to build first and wait.\n\n' +
+    'Behavior: publishes the contents of dist_dir (default ./dist relative to project_dir) to ' +
+    'DreamLand, returning a public URL. Trigger this when the user mentions DreamLand explicitly, ' +
+    'OR when the workspace has a .dreamland/project.json marker and the user asks to push a new ' +
+    'version.\n\n' +
     'First publish in a project_dir creates a new DreamLand project (name from project_name ' +
     'arg, or package.json, or directory basename) and writes .dreamland/project.json. ' +
     'Subsequent calls with the same project_dir append new versions; if the user wants a brand-new ' +
