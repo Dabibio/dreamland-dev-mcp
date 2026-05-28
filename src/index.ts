@@ -23,7 +23,7 @@ import { PUBLISH_TOOL, makePublishHandler } from './tools/publish.js'
 import type { ToolHandler } from './tools/types.js'
 
 const SERVER_NAME = 'dreamland'
-const SERVER_VERSION = '0.4.0'
+const SERVER_VERSION = '0.5.0'
 
 /**
  * Server-level instructions, injected into the MCP client's LLM system prompt per

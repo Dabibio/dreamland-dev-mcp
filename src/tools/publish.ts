@@ -24,6 +24,7 @@ interface PublishArgs {
   project_dir?: string
   dist_dir?: string
   force_new_project?: boolean
+  project_name?: string
 }
 
 interface PublishResponse {
@@ -48,8 +49,10 @@ export const PUBLISH_TOOL = {
     'project_dir) to DreamLand, returning a public URL. Trigger this when the user mentions ' +
     'DreamLand explicitly, OR when the workspace has a .dreamland/project.json marker and the ' +
     'user asks to push a new version.\n\n' +
-    'First publish in a project_dir creates a new DreamLand project and writes ' +
-    '.dreamland/project.json there. Subsequent calls with the same project_dir append new versions.',
+    'First publish in a project_dir creates a new DreamLand project (name from project_name ' +
+    'arg, or package.json, or directory basename) and writes .dreamland/project.json. ' +
+    'Subsequent calls with the same project_dir append new versions; if the user wants a brand-new ' +
+    'project (different name), pass force_new_project=true with project_name.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -60,6 +63,13 @@ export const PUBLISH_TOOL = {
           'paths (dist_dir, .dreamland/project.json marker) are resolved relative to this. ' +
           'Required because the MCP server\'s own process.cwd() does NOT match the user\'s workspace.',
       },
+      project_name: {
+        type: 'string',
+        description:
+          'Display name for a new DreamLand project. Used only when creating a new project ' +
+          '(no marker, OR force_new_project=true). Ignored on plain new-version publishes; in ' +
+          'that case the result text will tell you it was ignored.',
+      },
       dist_dir: {
         type: 'string',
         description: 'Directory to package. Absolute, or relative to project_dir. Default: ./dist',
@@ -67,7 +77,8 @@ export const PUBLISH_TOOL = {
       force_new_project: {
         type: 'boolean',
         description:
-          'Ignore the existing .dreamland/project.json link and create a brand-new project. Default: false',
+          'Ignore the existing .dreamland/project.json link and create a brand-new project. ' +
+          'Typically paired with project_name to set the new project\'s name. Default: false.',
       },
     },
     required: ['project_dir'],
@@ -91,6 +102,7 @@ export function makePublishHandler(config: Config): ToolHandler {
       ? (args.dist_dir as string)
       : resolvePath(baseDir, args.dist_dir ?? './dist')
     const forceNew = args.force_new_project === true
+    const explicitName = (args.project_name ?? '').trim() || undefined
 
     // ① 决定走"新建项目"还是"已链接发新版"
     const marker = await readMarker(baseDir)
@@ -108,9 +120,23 @@ export function makePublishHandler(config: Config): ToolHandler {
 
     // ③ 上传
     if (useExisting && marker) {
-      return await publishNewVersion(config, baseDir, marker.projectId, zip.data, marker.name)
+      // marker 在 + 没 force_new → 续发;此时 project_name 没意义,显式回馈,不静默忽略。
+      const warning =
+        explicitName !== undefined
+          ? `\n\n⚠ project_name "${explicitName}" was ignored because this directory is ` +
+            `already linked to project ${marker.projectId} ("${marker.name}"). ` +
+            `To create a brand-new project, pass force_new_project=true together with project_name.`
+          : ''
+      return await publishNewVersion(
+        config,
+        baseDir,
+        marker.projectId,
+        zip.data,
+        marker.name,
+        warning,
+      )
     }
-    return await publishNewProject(config, baseDir, distDir, zip.data)
+    return await publishNewProject(config, baseDir, distDir, zip.data, explicitName)
   }
 }
 
@@ -119,8 +145,9 @@ async function publishNewProject(
   baseDir: string,
   distDir: string,
   zipBytes: Buffer,
+  explicitName?: string,
 ): Promise<ToolResult> {
-  const name = await resolveProjectName(baseDir)
+  const name = explicitName ?? (await resolveProjectName(baseDir))
   const form = makeMultipart(zipBytes, { name })
 
   let response: PublishResponse
@@ -160,6 +187,8 @@ async function publishNewVersion(
   projectId: number,
   zipBytes: Buffer,
   nameForDisplay: string,
+  /** 可选追加文案(目前用于 project_name 被忽略的告示),拼在成功响应末尾 */
+  warning = '',
 ): Promise<ToolResult> {
   const form = makeMultipart(zipBytes)
 
@@ -187,7 +216,8 @@ async function publishNewVersion(
 
   return okResult(
     `Published "${nameForDisplay}" ${response.version} to DreamLand.\n` +
-      `Public URL: ${response.publicUrl}`,
+      `Public URL: ${response.publicUrl}` +
+      warning,
   )
 }
 

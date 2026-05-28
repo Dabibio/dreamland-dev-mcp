@@ -14,13 +14,17 @@ import { join, posix, relative, sep } from 'node:path'
 
 import archiver from 'archiver'
 
-/** 顶层名匹配即跳过(不区分大小写)。dist/ 里基本不会出现这些,但用户传错路径时是常见误打入项。 */
+/**
+ * 顶层名匹配即跳过(不区分大小写)。dist/ 里基本不会出现这些,但用户传错路径时是常见误打入项。
+ *
+ * 注:列表全部存小写,跟下面 `item.name.toLowerCase()` 的比较侧对齐。
+ */
 const EXCLUDED = new Set([
   '.git',
   '.svn',
   '.hg',
   'node_modules',
-  '.DS_Store',
+  '.ds_store',
   '.idea',
   '.vscode',
 ])

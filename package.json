@@ -1,6 +1,6 @@
 {
   "name": "@dreamland_dev/mcp",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "DreamLand MCP server — publish your built artifact (./dist) to DreamLand from any MCP-capable agent (Cursor, Claude Code, etc.)",
   "type": "module",
   "main": "dist/index.js",
@@ -18,6 +18,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepare": "npm run build",
     "inspect": "npm run build && npx @modelcontextprotocol/inspector node dist/index.js",
     "clean": "rm -rf dist"
@@ -42,6 +44,7 @@
   "devDependencies": {
     "@types/archiver": "^6.0.2",
     "@types/node": "^22.0.0",
-    "typescript": "^5.4.0"
+    "typescript": "^5.4.0",
+    "vitest": "^2.1.0"
   }
 }
