@@ -15,9 +15,8 @@ const baseConfig = {
   apiBase: 'http://backend.test',
 }
 
-// backend POST /projects 响应体形态 —— demoId 是 by-slug 寻址用,projectId 内部 PK(UI 可能用)。
+// backend 响应体形态 —— 只暴露业务键 demoId,DB 主键 projectId 不外露(对外标识纪律)。
 const publishOkBody = {
-  projectId: 99,
   demoId: 'foo-a1b2c3',
   publicUrl: 'https://foo-a1b2c3.example.com',
   version: 'v1',
@@ -87,7 +86,7 @@ describe('dreamland_publish', () => {
   })
 
   // ============================================================
-  // 续发场景 —— POST /projects/by-slug/{demoId}/versions(by-slug 路径)
+  // 续发场景 —— POST /projects/{demoId}/versions(业务键寻址)
   // ============================================================
 
   it('appends a new version when marker exists and force_new_project is false', async () => {
@@ -98,7 +97,7 @@ describe('dreamland_publish', () => {
     })
     stub = installFetchStub(
       whenRequest(
-        { method: 'POST', pathEndsWith: '/projects/by-slug/linked-app-xyz123/versions' },
+        { method: 'POST', pathEndsWith: '/projects/linked-app-xyz123/versions' },
         { status: 200, body: { ...publishOkBody, demoId: 'linked-app-xyz123', version: 'v3' } },
       ),
     )
@@ -106,7 +105,7 @@ describe('dreamland_publish', () => {
 
     expect(result.isError).toBeFalsy()
     expect(stub.calls).toHaveLength(1)
-    expect(stub.calls[0].url).toContain('/projects/by-slug/linked-app-xyz123/versions')
+    expect(stub.calls[0].url).toContain('/projects/linked-app-xyz123/versions')
     // 续发不传 name 字段
     expect((stub.calls[0].body as Record<string, unknown>).name).toBeUndefined()
 
@@ -124,7 +123,7 @@ describe('dreamland_publish', () => {
     })
     stub = installFetchStub(
       whenRequest(
-        { method: 'POST', pathEndsWith: '/projects/by-slug/old-aaaaaa/versions' },
+        { method: 'POST', pathEndsWith: '/projects/old-aaaaaa/versions' },
         { status: 200, body: { ...publishOkBody, demoId: 'old-aaaaaa', version: 'v2' } },
       ),
     )
@@ -134,7 +133,7 @@ describe('dreamland_publish', () => {
     })
 
     expect(result.isError).toBeFalsy()
-    expect(stub.calls[0].url).toContain('/projects/by-slug/old-aaaaaa/versions')
+    expect(stub.calls[0].url).toContain('/projects/old-aaaaaa/versions')
     const text = result.content[0].text
     expect(text).toMatch(/ignored/i)
     expect(text).toMatch(/force_new_project/i)
@@ -149,7 +148,7 @@ describe('dreamland_publish', () => {
     stub = installFetchStub(
       whenRequest(
         { method: 'POST', pathEndsWith: '/projects' },
-        { status: 200, body: { ...publishOkBody, demoId: 'fresh-bbbbbb', projectId: 88, version: 'v1' } },
+        { status: 200, body: { ...publishOkBody, demoId: 'fresh-bbbbbb', version: 'v1' } },
       ),
     )
     const result = await makePublishHandler(baseConfig)({
@@ -195,7 +194,7 @@ describe('dreamland_publish', () => {
     })
     stub = installFetchStub(
       whenRequest(
-        { method: 'POST', pathEndsWith: '/projects/by-slug/gone-cccccc/versions' },
+        { method: 'POST', pathEndsWith: '/projects/gone-cccccc/versions' },
         { status: 404, body: { code: 'PROJECT_NOT_FOUND', message: 'Project not found' } },
       ),
     )

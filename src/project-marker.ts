@@ -10,7 +10,7 @@
  * schemaVersion 历史:
  *  - v1(0.1.0 ~ 0.5.x):字段含 `projectId`(DB 主键)。**v0.6.0 起客户端不再支持读 v1**,
  *    告诉用户删 `.dreamland/` 重新 link 即可,无需迁移代码(dev 期约定无兼容)。
- *  - v2(0.6.0+):字段含 `demoId`(不可枚举的业务标识,backend 同步支持 `/projects/by-slug/{demoId}` 路径)。
+ *  - v2(0.6.0+):字段含 `demoId`(不可枚举的业务标识,backend 同步支持 `/projects/{demoId}` 路径)。
  */
 
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises'

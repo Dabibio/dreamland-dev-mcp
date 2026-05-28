@@ -7,7 +7,7 @@
  *  - 想把本目录指向一个已经存在的项目(不发新版,仅建立映射)
  *
  * 实现纪律:
- *  - **必须先 GET /projects/by-slug/{demoId} 验证项目存在且属当前用户** —— 不验证就写,等于把任意
+ *  - **必须先 GET /projects/{demoId} 验证项目存在且属当前用户** —— 不验证就写,等于把任意
  *    demo_id 塞进 marker,下次 publish 才发现 404,体验差;另外这也防止用户输错值卷死自己。
  *  - 走 backend ownership 校验,跟 N2 一致(失败一律 404 处理,不暴露存在性)。
  */
@@ -84,7 +84,7 @@ export function makeLinkHandler(config: Config): ToolHandler {
     try {
       project = await request<ProjectSummary>(
         config,
-        `/projects/by-slug/${encodeURIComponent(demoId)}`,
+        `/projects/${encodeURIComponent(demoId)}`,
       )
     } catch (e) {
       if (e instanceof BackendError && e.status === 404) {

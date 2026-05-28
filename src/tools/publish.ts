@@ -201,7 +201,7 @@ async function publishNewVersion(
   try {
     response = await request<PublishResponse>(
       config,
-      `/projects/by-slug/${encodeURIComponent(demoId)}/versions`,
+      `/projects/${encodeURIComponent(demoId)}/versions`,
       { method: 'POST', form },
     )
   } catch (e) {
