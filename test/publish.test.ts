@@ -15,6 +15,7 @@ const baseConfig = {
   apiBase: 'http://backend.test',
 }
 
+// backend POST /projects 响应体形态 —— demoId 是 by-slug 寻址用,projectId 内部 PK(UI 可能用)。
 const publishOkBody = {
   projectId: 99,
   demoId: 'foo-a1b2c3',
@@ -35,7 +36,7 @@ describe('dreamland_publish', () => {
   })
 
   // ============================================================
-  // 创建新项目场景
+  // 创建新项目场景 —— POST /projects(主键路径)
   // ============================================================
 
   it('uses project_name when explicitly provided (new project)', async () => {
@@ -52,10 +53,11 @@ describe('dreamland_publish', () => {
     expect(call.headers.authorization).toBe('Bearer dl_live_testtoken')
     expect((call.body as Record<string, unknown>).name).toBe('My Explicit Name')
 
-    // marker 写入用的也是显式名字
+    // marker v2 用 demoId 不是 projectId
     const marker = await readMarker(projectDir)
     expect(marker?.name).toBe('My Explicit Name')
-    expect(marker?.projectId).toBe(99)
+    expect(marker?.demoId).toBe('foo-a1b2c3')
+    expect(marker?.schemaVersion).toBe(2)
   })
 
   it('falls back to package.json name when project_name absent', async () => {
@@ -70,7 +72,6 @@ describe('dreamland_publish', () => {
     const result = await makePublishHandler(baseConfig)({ project_dir: projectDir })
 
     expect(result.isError).toBeFalsy()
-    // scope 部分去掉,只留 pkg-name
     expect((stub.calls[0].body as Record<string, unknown>).name).toBe('pkg-name')
   })
 
@@ -82,50 +83,49 @@ describe('dreamland_publish', () => {
 
     expect(result.isError).toBeFalsy()
     const name = (stub.calls[0].body as Record<string, unknown>).name as string
-    // baseName 应是 makeTempDir 生成的随机串(以 dlmcp-test- 开头)
     expect(name).toMatch(/^dlmcp-test-/)
   })
 
   // ============================================================
-  // 续发场景
+  // 续发场景 —— POST /projects/by-slug/{demoId}/versions(by-slug 路径)
   // ============================================================
 
   it('appends a new version when marker exists and force_new_project is false', async () => {
     await writeMarker(projectDir, {
-      projectId: 7,
+      demoId: 'linked-app-xyz123',
       name: 'Linked Name',
       createdAt: '2026-05-28T00:00:00.000Z',
     })
     stub = installFetchStub(
       whenRequest(
-        { method: 'POST', pathEndsWith: '/projects/7/versions' },
-        { status: 200, body: { ...publishOkBody, projectId: 7, version: 'v3' } },
+        { method: 'POST', pathEndsWith: '/projects/by-slug/linked-app-xyz123/versions' },
+        { status: 200, body: { ...publishOkBody, demoId: 'linked-app-xyz123', version: 'v3' } },
       ),
     )
     const result = await makePublishHandler(baseConfig)({ project_dir: projectDir })
 
     expect(result.isError).toBeFalsy()
     expect(stub.calls).toHaveLength(1)
-    expect(stub.calls[0].url).toContain('/projects/7/versions')
+    expect(stub.calls[0].url).toContain('/projects/by-slug/linked-app-xyz123/versions')
     // 续发不传 name 字段
     expect((stub.calls[0].body as Record<string, unknown>).name).toBeUndefined()
 
     // marker 不变(续发不写)
     const marker = await readMarker(projectDir)
-    expect(marker?.projectId).toBe(7)
+    expect(marker?.demoId).toBe('linked-app-xyz123')
     expect(marker?.name).toBe('Linked Name')
   })
 
   it('warns if project_name is supplied alongside existing marker without force_new_project', async () => {
     await writeMarker(projectDir, {
-      projectId: 7,
+      demoId: 'old-aaaaaa',
       name: 'Old',
       createdAt: '2026-05-28T00:00:00.000Z',
     })
     stub = installFetchStub(
       whenRequest(
-        { method: 'POST', pathEndsWith: '/projects/7/versions' },
-        { status: 200, body: { ...publishOkBody, projectId: 7, version: 'v2' } },
+        { method: 'POST', pathEndsWith: '/projects/by-slug/old-aaaaaa/versions' },
+        { status: 200, body: { ...publishOkBody, demoId: 'old-aaaaaa', version: 'v2' } },
       ),
     )
     const result = await makePublishHandler(baseConfig)({
@@ -134,9 +134,7 @@ describe('dreamland_publish', () => {
     })
 
     expect(result.isError).toBeFalsy()
-    // 仍走续发路径(版本接口)
-    expect(stub.calls[0].url).toContain('/projects/7/versions')
-    // tool_result 文本明确告诉 LLM/agent 这个 name 被忽略了
+    expect(stub.calls[0].url).toContain('/projects/by-slug/old-aaaaaa/versions')
     const text = result.content[0].text
     expect(text).toMatch(/ignored/i)
     expect(text).toMatch(/force_new_project/i)
@@ -144,14 +142,14 @@ describe('dreamland_publish', () => {
 
   it('creates new project with explicit project_name when force_new_project=true overrides marker', async () => {
     await writeMarker(projectDir, {
-      projectId: 7,
+      demoId: 'old-aaaaaa',
       name: 'Old Name',
       createdAt: '2026-05-28T00:00:00.000Z',
     })
     stub = installFetchStub(
       whenRequest(
         { method: 'POST', pathEndsWith: '/projects' },
-        { status: 200, body: { ...publishOkBody, projectId: 88, version: 'v1' } },
+        { status: 200, body: { ...publishOkBody, demoId: 'fresh-bbbbbb', projectId: 88, version: 'v1' } },
       ),
     )
     const result = await makePublishHandler(baseConfig)({
@@ -164,9 +162,9 @@ describe('dreamland_publish', () => {
     expect(stub.calls[0].url).toBe('http://backend.test/projects')
     expect((stub.calls[0].body as Record<string, unknown>).name).toBe('Fresh Fork')
 
-    // marker 覆盖到新项目
+    // marker 覆盖到新项目的 demoId
     const marker = await readMarker(projectDir)
-    expect(marker?.projectId).toBe(88)
+    expect(marker?.demoId).toBe('fresh-bbbbbb')
     expect(marker?.name).toBe('Fresh Fork')
   })
 
@@ -191,13 +189,13 @@ describe('dreamland_publish', () => {
 
   it('returns actionable error when continuing-version target 404s', async () => {
     await writeMarker(projectDir, {
-      projectId: 7,
+      demoId: 'gone-cccccc',
       name: 'Gone',
       createdAt: '2026-05-28T00:00:00.000Z',
     })
     stub = installFetchStub(
       whenRequest(
-        { method: 'POST', pathEndsWith: '/projects/7/versions' },
+        { method: 'POST', pathEndsWith: '/projects/by-slug/gone-cccccc/versions' },
         { status: 404, body: { code: 'PROJECT_NOT_FOUND', message: 'Project not found' } },
       ),
     )

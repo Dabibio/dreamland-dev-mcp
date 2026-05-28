@@ -1,6 +1,6 @@
 {
   "name": "@dreamland_dev/mcp",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "DreamLand MCP server — publish your built artifact (./dist) to DreamLand from any MCP-capable agent (Cursor, Claude Code, etc.)",
   "type": "module",
   "main": "dist/index.js",

@@ -124,13 +124,13 @@ export function makePublishHandler(config: Config): ToolHandler {
       const warning =
         explicitName !== undefined
           ? `\n\n⚠ project_name "${explicitName}" was ignored because this directory is ` +
-            `already linked to project ${marker.projectId} ("${marker.name}"). ` +
+            `already linked to project "${marker.name}" (${marker.demoId}). ` +
             `To create a brand-new project, pass force_new_project=true together with project_name.`
           : ''
       return await publishNewVersion(
         config,
         baseDir,
-        marker.projectId,
+        marker.demoId,
         zip.data,
         marker.name,
         warning,
@@ -161,7 +161,7 @@ async function publishNewProject(
   let markerWarning = ''
   try {
     await writeMarker(baseDir, {
-      projectId: response.projectId,
+      demoId: response.demoId,
       name,
       createdAt: new Date().toISOString(),
     })
@@ -170,13 +170,13 @@ async function publishNewProject(
     markerWarning =
       `\n\n⚠ Failed to write .dreamland/project.json: ${(e as Error).message}\n` +
       `Future publishes from this directory will create a NEW project unless you create the file ` +
-      `manually or run dreamland_link with project_id=${response.projectId}.`
+      `manually or run dreamland_link with demo_id="${response.demoId}".`
   }
 
   return okResult(
     `Created project "${name}" (${response.version}) on DreamLand.\n` +
       `Public URL: ${response.publicUrl}\n` +
-      `Project ID: ${response.projectId}` +
+      `Demo ID: ${response.demoId}` +
       markerWarning,
   )
 }
@@ -184,7 +184,7 @@ async function publishNewProject(
 async function publishNewVersion(
   config: Config,
   baseDir: string,
-  projectId: number,
+  demoId: string,
   zipBytes: Buffer,
   nameForDisplay: string,
   /** 可选追加文案(目前用于 project_name 被忽略的告示),拼在成功响应末尾 */
@@ -194,25 +194,26 @@ async function publishNewVersion(
 
   let response: PublishResponse
   try {
-    response = await request<PublishResponse>(config, `/projects/${projectId}/versions`, {
-      method: 'POST',
-      form,
-    })
+    response = await request<PublishResponse>(
+      config,
+      `/projects/by-slug/${encodeURIComponent(demoId)}/versions`,
+      { method: 'POST', form },
+    )
   } catch (e) {
     if (e instanceof BackendError && e.status === 404) {
       // marker 指向的项目不存在(被删 / 被改主)或不属于当前 token —— 给用户具体出路
       return errorResult(
-        `Project ${projectId} not found (linked in .dreamland/project.json). ` +
+        `Project "${demoId}" not found (linked in .dreamland/project.json). ` +
           `It may have been deleted, or your current API token belongs to a different account.\n\n` +
           `Next steps:\n` +
           `  • Delete .dreamland/ and run dreamland_publish again to create a fresh project, OR\n` +
-          `  • Run dreamland_link with the correct project_id, OR\n` +
+          `  • Run dreamland_link with a valid demo_id, OR\n` +
           `  • Verify DREAMLAND_TOKEN points to the right account.`,
       )
     }
     return mapBackendError(e, { context: 'publish new version' })
   }
-  logger.info('publish.version', { projectId, version: response.version })
+  logger.info('publish.version', { demoId, version: response.version })
 
   return okResult(
     `Published "${nameForDisplay}" ${response.version} to DreamLand.\n` +

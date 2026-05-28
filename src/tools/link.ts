@@ -7,8 +7,8 @@
  *  - 想把本目录指向一个已经存在的项目(不发新版,仅建立映射)
  *
  * 实现纪律:
- *  - **必须先 GET /projects/{id} 验证项目存在且属当前用户** —— 不验证就写,等于把任意 id 塞进
- *    marker,下次 publish 才发现 404,体验差;另外这也防止用户输错 id 把自己卷死。
+ *  - **必须先 GET /projects/by-slug/{demoId} 验证项目存在且属当前用户** —— 不验证就写,等于把任意
+ *    demo_id 塞进 marker,下次 publish 才发现 404,体验差;另外这也防止用户输错值卷死自己。
  *  - 走 backend ownership 校验,跟 N2 一致(失败一律 404 处理,不暴露存在性)。
  */
 
@@ -37,9 +37,12 @@ export const LINK_TOOL = {
   inputSchema: {
     type: 'object',
     properties: {
-      project_id: {
-        type: 'number',
-        description: 'Numeric project id to link to. Get it from dreamland_list_projects.',
+      demo_id: {
+        type: 'string',
+        description:
+          'The project\'s demo_id (a slug like "home-money-a3b9c7" — get it from ' +
+          'dreamland_list_projects). This is the same value that appears in the project\'s ' +
+          'public URL subdomain.',
       },
       project_dir: {
         type: 'string',
@@ -49,21 +52,21 @@ export const LINK_TOOL = {
           'the MCP server\'s own process.cwd() does NOT match the user\'s workspace.',
       },
     },
-    required: ['project_id', 'project_dir'],
+    required: ['demo_id', 'project_dir'],
     additionalProperties: false,
   },
 } as const
 
 export function makeLinkHandler(config: Config): ToolHandler {
   return async (raw): Promise<ToolResult> => {
-    const args = raw as { project_id?: unknown; project_dir?: unknown } | undefined
-    const projectId = Number(args?.project_id)
-    if (!Number.isInteger(projectId) || projectId <= 0) {
+    const args = raw as { demo_id?: unknown; project_dir?: unknown } | undefined
+    const demoId = typeof args?.demo_id === 'string' ? args.demo_id.trim() : ''
+    if (!demoId) {
       return {
         content: [
           {
             type: 'text',
-            text: 'project_id must be a positive integer. Use dreamland_list_projects to find it.',
+            text: 'demo_id is required. Use dreamland_list_projects to find your project\'s demo_id.',
           },
         ],
         isError: true,
@@ -79,7 +82,10 @@ export function makeLinkHandler(config: Config): ToolHandler {
 
     let project: ProjectSummary
     try {
-      project = await request<ProjectSummary>(config, `/projects/${projectId}`)
+      project = await request<ProjectSummary>(
+        config,
+        `/projects/by-slug/${encodeURIComponent(demoId)}`,
+      )
     } catch (e) {
       if (e instanceof BackendError && e.status === 404) {
         return {
@@ -87,7 +93,7 @@ export function makeLinkHandler(config: Config): ToolHandler {
             {
               type: 'text',
               text:
-                `Project ${projectId} not found or not owned by your account. ` +
+                `Project "${demoId}" not found or not owned by your account. ` +
                 `Run dreamland_list_projects to see your projects.`,
             },
           ],
@@ -116,11 +122,12 @@ export function makeLinkHandler(config: Config): ToolHandler {
 
     try {
       await writeMarker(baseDir, {
-        projectId: project.projectId,
+        demoId: project.demoId,
         name: project.name,
         createdAt: new Date().toISOString(),
       })
     } catch (e) {
+      const now = new Date().toISOString()
       return {
         content: [
           {
@@ -128,20 +135,20 @@ export function makeLinkHandler(config: Config): ToolHandler {
             text:
               `Verified project but failed to write marker: ${(e as Error).message}\n` +
               `Create .dreamland/project.json manually with: ` +
-              `{"schemaVersion":1,"projectId":${project.projectId},"name":${JSON.stringify(project.name)},"createdAt":"${new Date().toISOString()}"}`,
+              `{"schemaVersion":2,"demoId":${JSON.stringify(project.demoId)},"name":${JSON.stringify(project.name)},"createdAt":"${now}"}`,
           },
         ],
         isError: true,
       }
     }
-    logger.info('link.written', { projectId: project.projectId, baseDir })
+    logger.info('link.written', { demoId: project.demoId, baseDir })
 
     return {
       content: [
         {
           type: 'text',
           text:
-            `Linked "${baseDir}" to "${project.name}" (project ${project.projectId}).\n` +
+            `Linked "${baseDir}" to "${project.name}" (${project.demoId}).\n` +
             `Public URL: ${project.publicUrl}\n` +
             `Future dreamland_publish calls with project_dir="${baseDir}" will append new versions.`,
         },
